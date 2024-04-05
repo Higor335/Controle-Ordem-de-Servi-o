@@ -31,16 +31,19 @@ class GerenciadorOrdensServico:
         return [ordem for ordem in self.ordens_servico if ordem.entrega is not None]
 
 def salvar_ordens_servico(filename, ordens_servico):
-    with open(filename, mode='w', newline='') as file:
-        writer = csv.writer(file, delimiter=';')
-        writer.writerow(["Ordem", "Número da Ordem", "Recebimento", "Direcionado para", "Direcionamento", "Prazo Recebimento", "Prazo Devolução", "Entrega"])
-        for ordem in ordens_servico:
-            # Formatando as datas para o formato desejado
-            recebimento = ordem.recebimento.strftime("%d/%m/%Y %H:%M")
-            prazo_recebimento = ordem.prazo_recebimento.strftime("%d/%m/%Y")
-            prazo_devolucao = ordem.prazo_devolucao.strftime("%d/%m/%Y")
-            entrega = ordem.entrega.strftime("%d/%m/%Y %H:%M") if ordem.entrega is not None else ""
-            writer.writerow([ordem.nome, ordem.numero, recebimento, ordem.direcionado_para, ordem.direcionamento, prazo_recebimento, prazo_devolucao, entrega])
+    try:
+        with open(filename, mode='w', newline='') as file:
+            writer = csv.writer(file, delimiter=';')
+            writer.writerow(["Ordem", "Número da Ordem", "Recebimento", "Direcionado para", "Direcionamento", "Prazo Recebimento", "Prazo Devolução", "Entrega"])
+            for ordem in ordens_servico:
+                # Formatando as datas para o formato desejado
+                recebimento = ordem.recebimento.strftime("%d/%m/%Y %H:%M")
+                prazo_recebimento = ordem.prazo_recebimento.strftime("%d/%m/%Y")
+                prazo_devolucao = ordem.prazo_devolucao.strftime("%d/%m/%Y")
+                entrega = ordem.entrega.strftime("%d/%m/%Y %H:%M") if ordem.entrega is not None else ""
+                writer.writerow([ordem.nome, ordem.numero, recebimento, ordem.direcionado_para, ordem.direcionamento, prazo_recebimento, prazo_devolucao, entrega])
+    except Exception as e:
+        messagebox.showerror("Erro", f"Erro ao salvar arquivo: FECHE O ARQUIVO EXCEL: ordens_servico.")
 
 
 def carregar_ordens_servico(filename):
@@ -49,17 +52,19 @@ def carregar_ordens_servico(filename):
         with open(filename, mode='r') as file:
             reader = csv.reader(file, delimiter=';')
             next(reader)  # Pular o cabeçalho
+            
             for row in reader:
                 if len(row) == 8:  
                     nome, numero, recebimento, direcionado_para, direcionamento, prazo_recebimento, prazo_devolucao, entrega = row
-                    # Convertendo as datas do formato do arquivo para o formato Python
-                    recebimento = datetime.strptime(recebimento, "%d/%m/%Y %H:%M")
-                    prazo_recebimento = datetime.strptime(prazo_recebimento, "%d/%m/%Y").date()
-                    prazo_devolucao = datetime.strptime(prazo_devolucao, "%d/%m/%Y").date()
-                    entrega = datetime.strptime(entrega, "%d/%m/%Y %H:%M") if entrega else None
-                    ordem = OrdemServico(nome, numero, recebimento, direcionado_para, direcionamento, prazo_recebimento, prazo_devolucao)
-                    ordem.entrega = entrega
-                    ordens_servico.append(ordem)
+                    if prazo_recebimento and prazo_devolucao:
+                        # Convertendo as datas do formato do arquivo para o formato Python
+                        recebimento = datetime.strptime(recebimento, "%d/%m/%Y %H:%M")
+                        prazo_recebimento = datetime.strptime(prazo_recebimento, "%d/%m/%Y").date()
+                        prazo_devolucao = datetime.strptime(prazo_devolucao, "%d/%m/%Y").date()
+                        entrega = datetime.strptime(entrega, "%d/%m/%Y %H:%M") if entrega else None
+                        ordem = OrdemServico(nome, numero, recebimento, direcionado_para, direcionamento, prazo_recebimento, prazo_devolucao)
+                        ordem.entrega = entrega
+                        ordens_servico.append(ordem)
                 else:
                     print(f"A linha não tem o número correto de valores: {row}")
     except FileNotFoundError:
@@ -71,10 +76,21 @@ def inserir_ordem():
     nome = entry_nome.get()
     numero = entry_numero.get()
     direcionado_para = entry_direcionado_para.get()
-    prazo_recebimento = datetime.strptime(entry_prazo_recebimento.get(), "%d/%m/%Y").date()
-    prazo_devolucao = datetime.strptime(entry_prazo_devolucao.get(), "%d/%m/%Y").date()
+    prazo_recebimento = entry_prazo_recebimento.get()
+    prazo_devolucao = entry_prazo_devolucao.get()
 
-
+    if not all([nome, numero, direcionado_para, prazo_recebimento, prazo_devolucao]):
+        messagebox.showerror("Erro", "Todos os campos devem ser preenchidos.")
+        return
+    
+    try:
+        prazo_recebimento = datetime.strptime(prazo_recebimento, "%d/%m/%Y").date()
+        prazo_devolucao = datetime.strptime(prazo_devolucao, "%d/%m/%Y").date()
+    except ValueError:
+        messagebox.showerror("Erro", "Formato de data inválido. Use o formato dd/mm/aaaa.")
+        return
+    
+    
     nova_ordem = OrdemServico(nome, numero, datetime.now(), direcionado_para, datetime.now(), prazo_recebimento, prazo_devolucao)
     gerenciador.inserir_ordem_servico(nova_ordem)
     salvar_ordens_servico("ordens_servico.csv", gerenciador.ordens_servico)
@@ -84,6 +100,13 @@ def inserir_ordem():
     for botao in botoes_recebido:
         botao.destroy()  # Remove o botão da interface gráfica
     lista_ordens.delete(0, tk.END)
+
+    # Limpar os campos de entrada e atualizar a lista de ordens pendentes na interface
+    entry_nome.delete(0, tk.END)
+    entry_numero.delete(0, tk.END)
+    entry_direcionado_para.delete(0, tk.END)
+    entry_prazo_recebimento.delete(0, tk.END)
+    entry_prazo_devolucao.delete(0, tk.END)
 
     listar_ordens_pendentes()
     messagebox.showinfo("Sucesso", "Ordem de Serviço inserida com sucesso!")
